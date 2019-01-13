@@ -33,6 +33,15 @@
 #define DB_PAUSE		5
 #define DB_UPDATETTL	6
 
+#ifdef _TG_WINDOWS_
+	#define WINDLL_EXPORT __declspec(dllexport)
+	#if defined(_MSC_VER) && (_MSC_VER < 1900)	// VS2015 support __func__
+		#define __func__	__FUNCTION__
+	#endif
+#else
+	#define WINDLL_EXPORT
+#endif
+
 typedef struct HdbEventDataType_
 {
 	string attr_name;
@@ -91,13 +100,18 @@ public:
 
 };
 
-class HdbClient
+class WINDLL_EXPORT HdbClient
 {
 
 private:
 	AbstractDB *db;
 	DBFactory *db_factory;
-	void* hLib;
+#ifdef _TG_WINDOWS_
+	using ModuleHandle = HMODULE;
+#else
+	using ModuleHandle = void *;
+#endif
+	ModuleHandle hLib;
 
 	DBFactory *getDBFactory();
 	void string_explode(string str, string separator, vector<string>* results);
@@ -123,7 +137,7 @@ public:
 extern "C"
 {
 	typedef DBFactory * getDBFactory_t();
-    DBFactory *getDBFactory();
+    WINDLL_EXPORT DBFactory *getDBFactory();
 }
 
 #endif // _HDBPP_H

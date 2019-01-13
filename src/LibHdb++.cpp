@@ -20,13 +20,15 @@
 
 #include "LibHdb++.h"
 #include "LibHdb++Config.h"
+#ifndef _TG_WINDOWS_
 #include <dlfcn.h>
+#endif
 
 HdbClient::HdbClient(vector<string> configuration)
 {
-    cout << "Starting version: " 
-         << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_REVISION << ":" 
-         << BUILD_TIME << endl;
+	cout << "Starting version: " 
+		<< VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_REVISION << ":" 
+		<< BUILD_TIME << endl;
 
 	map<string,string> db_conf;
 	string_vector2map(configuration,"=",&db_conf);
@@ -42,9 +44,15 @@ HdbClient::HdbClient(vector<string> configuration)
 		exit(1);
 	}
 
+#ifdef _TG_WINDOWS_
+	if ((hLib = LoadLibrary(libname.c_str())))
+	{
+		if(getDBFactory_t* create_factory = (getDBFactory_t*)GetProcAddress(hLib, "getDBFactory"))
+#else
 	if ((hLib = dlopen(libname.c_str(), RTLD_NOW/*|RTLD_GLOBAL*/)))
 	{
 		if (getDBFactory_t* create_factory = (getDBFactory_t*)dlsym(hLib, "getDBFactory"))
+#endif
 		{
 			db_factory = create_factory();
 			db = db_factory->create_db(configuration);
@@ -63,7 +71,18 @@ HdbClient::HdbClient(vector<string> configuration)
 	else
 	{
 		db = NULL;
+	#ifdef _TG_WINDOWS_
+		char *errinfo;
+		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+			FORMAT_MESSAGE_FROM_SYSTEM, nullptr, 
+			GetLastError(), 
+			MAKELANGID(/*LANG_NEUTRAL*/LANG_ENGLISH, SUBLANG_DEFAULT), 
+			(LPTSTR)&errinfo, 0, nullptr);
+		cout << __func__<<": Error loading library " << libname << ". Error report: " << errinfo << endl;
+		LocalFree(errinfo);
+	#else
 		cout << __func__<<": Error loading library " << libname << ". Error report: " << dlerror() << endl;
+	#endif
 		exit(1);
 	}
 }
@@ -97,7 +116,11 @@ HdbClient::~HdbClient()
 {
 	delete db;
 	delete db_factory;
+#ifdef _TG_WINDOWS_
+	FreeLibrary(hLib);
+#else
 	dlclose(hLib);
+#endif
 }
 
 void HdbClient::string_explode(string str, string separator, vector<string>* results)
